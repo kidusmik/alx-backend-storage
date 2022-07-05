@@ -1,19 +1,48 @@
 #!/usr/bin/env python3
-"""Log stat"""
-
+"""Defines a function that  provides some stats
+   about Nginx logs stored in MongoDB
+"""
 
 from pymongo import MongoClient
 
-client = MongoClient('mongodb://127.0.0.1:27017')
-nginx = client.logs.nginx
 
-print(f'{nginx.count_documents({})}')
-print('Methods:')
+def nginx_stats_check():
+    """ provides some stats about Nginx logs stored in MongoDB:"""
+    client = MongoClient()
+    collec_nginx = client.logs.nginx
 
-print(f'\tmethod GET: {nginx.count_documents({"method": "GET"})}')
-print(f'\tmethod POST: {nginx.count_documents({"method": "POST"})}')
-print(f'\tmethod PUT: {nginx.count_documents({"method": "PUT"})}')
-print(f'\tmethod PATCH: {nginx.count_documents({"method": "PATCH"})}')
-print(f'\tmethod DELETE: {nginx.count_documents({"method": "DELETE"})}')
+    num_of_docs = collec_nginx.count_documents({})
+    print("{} logs".format(num_of_docs))
+    print("Methods:")
+    methods_list = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+    for method in methods_list:
+        method_count = collec_nginx.count_documents({"method": method})
+        print("\tmethod {}: {}".format(method, method_count))
+    status = collec_nginx.count_documents({"method": "GET", "path": "/status"})
+    print("{} status check".format(status))
 
-print(f'{nginx.count_documents({"path": "/status"})} status check')
+    print("IPs:")
+
+    top_IPs = collec_nginx.aggregate([
+        {"$group":
+         {
+             "_id": "$ip",
+             "count": {"$sum": 1}
+         }
+         },
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+        {"$project": {
+            "_id": 0,
+            "ip": "$_id",
+            "count": 1
+        }}
+    ])
+    for top_ip in top_IPs:
+        count = top_ip.get("count")
+        ip_address = top_ip.get("ip")
+        print("\t{}: {}".format(ip_address, count))
+
+
+if __name__ == "__main__":
+    nginx_stats_check()
